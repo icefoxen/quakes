@@ -5,6 +5,10 @@ and solar weather data from the GOES series of satellites, to see if there's any
 
 Inspired by silly conspiricy posts: https://www.reddit.com/r/conspiracy/comments/6yhv3l/the_ultimate_earthquake_test_is_about_to_commence/  Really I just said "well I have the data and know what to do with it, I might as well."
 
+For a more authorative treatment, one probably wants this: http://onlinelibrary.wiley.com/doi/10.1002/grl.50211/abstract --
+Insignificant solar-terrestrial triggering of earthquakes by Love and Thomas, March 2013, Geophysical Research Letters, DOI
+10.1002/grl.50211 .
+
 # Data sources
 
  * https://earthquake.usgs.gov/data/centennial/ (included)
