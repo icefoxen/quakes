@@ -6,8 +6,23 @@
 import calendar
 import datetime
 import os
+import logging
 import pandas as pd
 import matplotlib.pyplot as plt
+
+logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
+
+def index_by_dates(ds):
+    """
+    Takes a DataFrame with an ordtime column containing Python datetime objects,
+    and returns a DataFrame indexed by those datetime's as a pandas.DatetimeIndex.
+    """
+    # set_index() makes a different column the index.
+    # It also makes a copy by default.
+    # But copying even the large magnetometer dataset doesn't seem to take long, so.
+    ds2 = ds.set_index(['ordtime'])
+    ds2.index = pd.DatetimeIndex(data=ds['ordtime'])
+    return ds2
 
 def read_magnetometer():
     goes = 6
@@ -18,7 +33,7 @@ def read_magnetometer():
 
     format_str = 'g{goes:02}_magneto_1m_{year:04}{month:02}{start_day:02}_{year:04}{month:02}{end_day:02}.csv'
     
-    print("Collecting files")
+    logging.info("Collecting files")
     files = []
     for year in range(1986,2009):
     # for year in range(1986,1987):
@@ -54,7 +69,7 @@ def read_magnetometer():
                 files.append(g10)
     dat = []
     for f in files:
-        print("Reading file", f)
+        logging.info("Reading file %s", f)
         with open(f, 'r') as fdata:
             # Headers aren't always the same size.  :/
             # So we have to skip past it manually.
@@ -65,7 +80,7 @@ def read_magnetometer():
                 continue
             dat.append(pd.read_csv(fdata))
     # print(dat)
-    full_dataset = pd.concat(dat)
+    full_dataset = pd.concat(dat, ignore_index=True)
     # -99999.0 is used as an "invalid" reading
     print("Cleaning data")
     clean_dataset = full_dataset[full_dataset.hp != -99999.0]
@@ -76,22 +91,17 @@ def read_magnetometer():
     # Now we parse and add an ordinal time column
     # The GOES time columns are like this: 2006-04-02 12:01:00.000
     def make_date(row):
-        return datetime.datetime.strptime(row.time_tag, '%Y-%m-%d %H:%M:%S.000').timestamp()
+        return datetime.datetime.strptime(row.time_tag, '%Y-%m-%d %H:%M:%S.000')
 
-    print("Translating dates")
+    logging.info("Translating dates")
     dates = clean_dataset.apply(make_date, axis=1)
     clean_dataset = clean_dataset.assign(ordtime=dates)
 
-    print("Normalizing magnetometer data")
-    d = clean_dataset
-    d.hp = (d.hp - d.hp.mean())  / (d.hp.max() - d.hp.min())
-    d.he = (d.he - d.he.mean())  / (d.he.max() - d.he.min())
-    d.hn = (d.hn - d.hn.mean())  / (d.hn.max() - d.hn.min())
-    d.ht = (d.ht - d.ht.mean())  / (d.ht.max() - d.ht.min())
-    return d
+    logging.info("Reindexing...")
+    return index_by_dates(clean_dataset)
 
 def read_quakes():
-    print("Reading quakes file")
+    logging.info("Reading quakes file")
     quakes = pd.read_csv('centennial_Y2K.csv')
     # We just skip past any earthquakes before 1986
     recent_quakes = quakes[quakes.yr > 1985]
@@ -99,49 +109,102 @@ def read_quakes():
     # Now we add an absolute ordinal time column, so we can compare
     # apples to apples easily.
     def make_date(row):
-        return datetime.datetime(row.yr, row.mon, row.day, row.hr, row['min'], int(row.sec)).timestamp()
+        return datetime.datetime(row.yr, row.mon, row.day, row.hr, row['min'], int(row.sec))
         # print(x)
     # ord_date = date.timestamp()
-    print("Translating dates")
+    logging.info("Translating dates")
     dates = recent_quakes.apply(make_date, axis=1)
     recent_quakes = recent_quakes.assign(ordtime=dates)
 
-    print("Normalizing quakes")
-    q = recent_quakes
-    q.mag = (q.mag - q.mag.mean())  / (q.mag.max() - q.mag.min())
-    return q
+    logging.info("Reindexing...")
+    return index_by_dates(recent_quakes)
 
 def read_cached(reader, cachename):
     if os.path.isfile(cachename):
-        print("Using cached file", cachename)
-        return pd.read_csv(cachename)
+        logging.info("Reading cached file %s", cachename)
+        return pd.read_csv(cachename, parse_dates=[0], index_col=0)
     else:
-        print("No cached file found")
+        logging.info("No cached file found")
         d = reader()
-        print("Saving cache to", cachename)
+        logging.info("Saving cache to %s", cachename)
         d.to_csv(cachename)
         return d
+
+
+def extract_important_quake_columns(q):
+    # ind = q['ordtime']
+    data = q['mag']
+    # Ok, index doesn't work the way I want it to here, apparently...
+    return pd.DataFrame(data=data, index=q.index)
+    # set_index() makes a different column the index.
+    # It also makes a copy by default.
+    # But copying even the large magnetometer dataset doesn't seem to take long, so.
+    # return q.set_index(['ordtime'])
+
+def extract_important_mag_columns(m):
+    # ind = m['ordtime']
+    data = {
+        'hp': m['hp'],
+        'he': m['he'],
+        'hn': m['hn'],
+        'ht': m['ht'],
+    }
+    return pd.DataFrame(data=data, index=m.index)
+    # return m.set_index(['ordtime'])
 
 def main():
 
     q = read_cached(read_quakes, 'quake.cache')
+    m = read_cached(read_magnetometer, 'mag.cache')
+    logging.info("Extracting only the data we care about")
+    q = extract_important_quake_columns(q)
+    m = extract_important_mag_columns(m)
+
+    # Resample everything to hourly.
+    logging.info("Resampling and joining data")
+    q_resampled = q.resample('H').mean().bfill(0)
+    m_resampled = m.resample('H').mean().bfill(0)
+    # Ditch the old values 'cause we don't need them anymore.
+    q = q_resampled
+    m = m_resampled
+    # return (q,m)
+
+    # Now we chop off the start and end bits of the data so they both
+    # line up perfectly.  Which is more annoying than it should be for
+    # some reason because pandas is just NOT properly indexing by 
+    # datetime, no matter WHAT the docs say should be happening.
+    # Bah.
+    data_start = max(q.index[0], m.index[0])
+    data_end = min(q.index[-1], m.index[-1])
+    q_index_start = q.index.get_loc(data_start)
+    q_index_end = q.index.get_loc(data_end)
+    m_index_start = m.index.get_loc(data_start)
+    m_index_end = m.index.get_loc(data_end)
+
+    q_sliced = q[q_index_start:q_index_end]
+    m_sliced = m[m_index_start:m_index_end]
+
+    # Now we can finally join the two dataframes together
+    alldata = m_sliced.join(q_sliced)
+
+    print("CORRELATION MATRICES")
+    print("Pearson")
+    print(alldata.corr('pearson'))
+    print("Kendall")
+    print(alldata.corr('kendall'))
+    print("Spearman")
+    print(alldata.corr('spearman'))
 
 
-    d = read_cached(read_magnetometer, 'mag.cache')
+    return (q_sliced, m_sliced)
 
     # print("Plotting quakes")
-    # plt.plot(q.ordtime, q.mag)
-    # print("Plotting magnetometer data")
-    # plt.plot(d.ordtime, d['hp'])
-    # plt.plot(d.ordtime, d['he'])
-    # plt.plot(d.ordtime, d['hn'])
-    # plt.plot(d.ordtime, d['ht'])
-    # plt.show()
+    # q_resampled.plot()
+    # # plt.show()
 
-    # from pandas.tools.plotting import autocorrelation_plot
-    # # autocorrelation_plot(q.mag)
-    # print("Autocorrelating plottingses")
-    # autocorrelation_plot(d.hp)
+
+    # print("Plotting mag stuffs")
+    # m_resampled.plot()
     # plt.show()
 
 
