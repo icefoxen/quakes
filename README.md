@@ -19,6 +19,10 @@ Note that the GOES data used comes from three separate satellites, and the Cente
 
 There ARE some gaps in the GOES data, one of them large from 1991-1994 or something; filling those in someday would be nice.  Should be easy to extend though; just find which satellites were active and add their data into the thing.
 
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/quakes.png)
+
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/magnetometer.png)
+
 # Methods
 
 There's a python script called `mongle.py` to aggregate and process the data, and perform some correlation analysis on it.  It requires python3, numpy, pandas, and matplotlib.
@@ -106,9 +110,18 @@ ht   0.798413 -0.502389  0.864214  1.000000  0.091716
 mag  0.130210 -0.056131  0.062272  0.091716  1.000000
 ```
 
+
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/mag-vs-he.png)
+
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/mag-vs-hn.png)
+
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/mag-vs-hp.png)
+
+![](https://raw.githubusercontent.com/icefoxen/quakes/master/figures/mag-vs-ht.png)
+
 # Discussion
 
-We have some sanity check that it's working the way we think it is since the magnetic field strengths are all fairly well correlated with each other.  Meanwhile the earthquake magnitude has a maximum Pearson correlation of 0.116 with `he` in the weekly interpolation setup, which is more than I expected basically nothing.  So, to the surprise of probably not many people, there's no significant correlation between magnetic field strength and earthquake magnitude in the time period studied.
+We have some sanity check that it's working the way we think it is since the magnetic field strengths are all fairly well correlated with each other.  Meanwhile the earthquake magnitude has a maximum Pearson correlation of 0.116 with `he` in the weekly interpolation setup, which is more than I expected but still basically nothing.  So, to the surprise of probably not many people, there's no significant correlation between magnetic field strength and earthquake magnitude in the time period studied.
 
 # Further work
 
