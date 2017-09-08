@@ -152,7 +152,7 @@ def extract_important_mag_columns(m):
     return pd.DataFrame(data=data, index=m.index)
     # return m.set_index(['ordtime'])
 
-def main():
+def fully_process_data():
 
     q = read_cached(read_quakes, 'quake.cache')
     m = read_cached(read_magnetometer, 'mag.cache')
@@ -186,7 +186,9 @@ def main():
 
     # Now we can finally join the two dataframes together
     alldata = m_sliced.join(q_sliced)
+    return alldata
 
+def correlation_results(alldata):
     print("CORRELATION MATRICES")
     print("Pearson")
     print(alldata.corr('pearson'))
@@ -195,18 +197,69 @@ def main():
     print("Spearman")
     print(alldata.corr('spearman'))
 
+    alldata_daily = alldata.resample('D').mean().bfill(0)
+    print("DAILY CORRELATIONS")
+    print("Pearson")
+    print(alldata_daily.corr('pearson'))
+    print("Kendall")
+    print(alldata_daily.corr('kendall'))
+    print("Spearman")
+    print(alldata_daily.corr('spearman'))
 
-    return (q_sliced, m_sliced)
+    alldata_weekly = alldata.resample('W').mean().bfill(0)
+    print("WEEKLY CORRELATIONS")
+    print("Pearson")
+    print(alldata_weekly.corr('pearson'))
+    print("Kendall")
+    print(alldata_weekly.corr('kendall'))
+    print("Spearman")
+    print(alldata_weekly.corr('spearman'))
 
-    # print("Plotting quakes")
-    # q_resampled.plot()
-    # # plt.show()
+
+def plot_data(alldata):
+    print("Plotting quakes")
+    alldata.mag.plot()
+    plt.title("Earthquake magnitude")
+    plt.show()
 
 
-    # print("Plotting mag stuffs")
-    # m_resampled.plot()
-    # plt.show()
+    print("Plotting mag stuffs")
+    magdata = alldata.filter(['he', 'hn', 'hp', 'ht'])
+    magdata.plot()
+    plt.title("Magnetometer intensity")
+    plt.show()
 
+    print("Making scatter plots")
+    plt.title("Earthquakes vs. total magnetic field")
+    plt.scatter(alldata.mag, alldata.ht)
+    plt.xlabel("Earthquake magnitude")
+    plt.ylabel("nT")
+    plt.show()
+
+    plt.title("Earthquakes vs. he")
+    plt.scatter(alldata.mag, alldata.he)
+    plt.xlabel("Earthquake magnitude")
+    plt.ylabel("nT")
+    plt.show()
+
+
+    plt.title("Earthquakes vs. hn")
+    plt.scatter(alldata.mag, alldata.hn)
+    plt.xlabel("Earthquake magnitude")
+    plt.ylabel("nT")
+    plt.show()
+
+
+    plt.title("Earthquakes vs. hp")
+    plt.scatter(alldata.mag, alldata.hp)
+    plt.xlabel("Earthquake magnitude")
+    plt.ylabel("nT")
+    plt.show()
+
+def main():
+    alldata = fully_process_data()
+    correlation_results(alldata)
+    plot_data(alldata)
 
 if __name__ == '__main__':
     main()
